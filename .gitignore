@@ -1,0 +1,16 @@
+# Secrets
+.streamlit/secrets.toml
+.env
+
+# Large Datasets
+cleaned_master*.csv
+*.dbf
+
+# Python Caches
+__pycache__/
+*.pyc
+
+# Local Environments
+venv/
+env/
+.venv/
