@@ -52,11 +52,11 @@ def predict_traffic(region, date, selected_time, direction, siteref):
     match = get_prediction_row(date, selected_time, direction, siteref)
     if match is not None:
         if 'Predicted_Flow' in match.columns:
-            return int(match['Predicted_Flow'].iloc[0])
+            return max(0, int(match['Predicted_Flow'].iloc[0]))
         elif 'XGBoost_Pred' in match.columns:
-            return int(match['XGBoost_Pred'].iloc[0])
+            return max(0, int(match['XGBoost_Pred'].iloc[0]))
         else:
-            return int(match.iloc[0, -1]) 
+            return max(0, int(match.iloc[0, -1]))
     else:
         return None
 
@@ -111,7 +111,26 @@ def create_shap_waterfall(model, row_df):
         if name in NRC_FEATURES:
             display_name = f"🚨 {display_name}"
             
-        y_cats.append(display_name)
+        # --- Format the current feature value for the label ---
+        val = row_df[name].iloc[0]
+        if name in ['TEMP', 'DEWP']:
+            val_label = f"{val:.1f}°C"
+        elif name == 'RH':
+            val_label = f"{val:.1f}%"
+        elif name in ['WDSP', 'GUST']:
+            val_label = f"{val:.1f}km/h"
+        elif name == 'VISIB':
+            val_label = f"{val:.2f}km"
+        elif name in ['FLOW_lag_1h', 'FLOW_lag_24h', 'FLOW_lag_168h', 'FLOW_roll_mean_4h']:
+            val_label = f"{val:,.0f}vph"
+        elif name in ['HOUR_SIN', 'HOUR_COS', 'DAY_SIN', 'DAY_COS', 'MONTH_SIN', 'MONTH_COS']:
+            val_label = f"{val:.2f}"
+        elif name == 'YEAR':
+            val_label = f"{int(val)}"
+        else:
+            val_label = "Yes" if val == 1 else "No"
+
+        y_cats.append(f"<b>{val_label}</b> = {display_name}")
         x_vals.append(impact)
         sign = "+" if impact > 0 else ""
         text.append(f"{sign}{impact:,.0f} vph")
@@ -140,11 +159,11 @@ def create_shap_waterfall(model, row_df):
     
     fig.update_layout(
         title=dict(text="Feature Impact on Prediction (SHAP Values)", font=dict(family="Inter", size=14, color="#4a5568")),
-        height=500,
+        height=520,
         plot_bgcolor='white',
         paper_bgcolor='white',
-        margin=dict(l=20, r=60, t=50, b=50),
-        yaxis=dict(autorange="reversed"),  # To show largest impact at top
+        margin=dict(l=150, r=80, t=50, b=50),
+        yaxis=dict(autorange="reversed", tickfont=dict(size=11)),  # To show largest impact at top
         showlegend=True,
         legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5, font=dict(size=12))
     )
@@ -271,9 +290,10 @@ def create_prediction_chart(daily_df, selected_time, scenario="Current"):
     end_dt = target_dt + pd.Timedelta(hours=4)
     future_df = daily_df[(daily_df['DATETIME_HOUR'] >= target_dt) & (daily_df['DATETIME_HOUR'] <= end_dt)]
     
+    # Use the TRUE daily peak (full 24h) so the chart marker matches the metric box
     peak_time = None
-    if not future_df.empty:
-        peak_row = future_df.loc[future_df[pred_col].idxmax()]
+    if not daily_df.empty:
+        peak_row = daily_df.loc[daily_df[pred_col].idxmax()]
         peak_time = peak_row['DATETIME_HOUR']
         
         highlight_start = peak_time - pd.Timedelta(minutes=30)
@@ -830,7 +850,7 @@ if st.session_state.dashboard_visible:
 <div class="metric-card">
 <div class="metric-header"><span>PREDICTED TRAFFIC</span> <span>🚘</span></div>
 <div class="metric-value">{pred_text} <span class="metric-value-sub">vph</span></div>
-<div class="metric-footer"><span class="metric-delta">↗ +8.4%</span> vs. historical avg</div>
+<div class="metric-footer"><span class="metric-delta"></div>
 </div>
 
 <div class="metric-card">
